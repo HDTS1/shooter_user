@@ -70,7 +70,7 @@ if [ "$RESPONSE" -eq 0 ]; then
     yad --title="Update Complete" \
         --text="Update completed successfully.\nRebooting system..." \
         --timeout=2 --no-buttons --center
-    sudo reboot
+    /usr/sbin/reboot
 else
     echo "User skipped update."
     nohup /home/controller/shooter/controller/ShooterController > /dev/null 2>&1 & disown
