@@ -1,0 +1,17 @@
+---
+- name: Ensure autostart directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.config/autostart"
+    state: directory
+    mode: '0755'
+
+- name: Create autostart .desktop entry
+  copy:
+    dest: "{{ ansible_env.HOME }}/.config/autostart/clear-chrome.desktop"
+    mode: '0644'
+    content: |
+      [Desktop Entry]
+      Type=Application
+      Name=Clear Chromium Locks
+      Exec=bash -c 'rm -f ~/.config/chromium/Singleton* ~/.config/google-chrome/Singleton*'
+      X-GNOME-Autostart-enabled=true
