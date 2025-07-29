@@ -38,29 +38,28 @@ if [ ! -f "$LOCAL_CHANGELOG" ]; then
         --text="No previous changelog found.\nPerforming initial update..." \
         --timeout=2 --no-buttons --center
 
-    pkill Shoo
+pkill Shoo
+sleep 1
+
+if ansible-pull -U https://github.com/HDTS1/shooter_user.git main.yml 2>&1 \
+    | yad --title="Applying Update..." --width=600 --height=400 --text-info --center --wrap --no-buttons; then
+
+    cp "$TMP_REMOTE_LOG" "$LOCAL_CHANGELOG"
     sleep 1
-
-    if ansible-pull -U https://github.com/HDTS1/shooter_user.git main.yml 2>&1 \
-        | tee >(yad --title="Initial Update..." --width=600 --height=400 \
-                    --text-info --tail --no-buttons --center) \
-        | cat > /dev/null; then
-
-        cp "$TMP_REMOTE_LOG" "$LOCAL_CHANGELOG"
-        sleep 1
-        yad --title="Update Complete" \
-            --text="<span font='13' foreground='green'><b>Update completed successfully.\nSystem will now reboot.</b></span>" \
-            --button="👍 OK:0" --center
-        /usr/sbin/reboot
+    yad --title="Update Complete" \
+        --text="<span font='13' foreground='green'><b>Update completed successfully.\nSystem will now reboot.</b></span>" \
+        --button="👍 OK:0" --center
+    /usr/sbin/reboot
+else
+    show_update_result "Update failed.\nPlease retry or launch app anyway." "red" true
+    RESPONSE=$?
+    if [ "$RESPONSE" -eq 2 ]; then
+        exec "$0"
     else
-        show_update_result "Initial update failed.\nPlease retry or skip." "red" true
-        RESPONSE=$?
-        if [ "$RESPONSE" -eq 2 ]; then
-            exec "$0"
-        else
-            nohup "$APP_EXEC" > /dev/null 2>&1 & disown
-        fi
+        nohup "$APP_EXEC" > /dev/null 2>&1 & disown
     fi
+fi
+
     exit 0
 fi
 
