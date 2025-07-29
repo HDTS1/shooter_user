@@ -42,7 +42,7 @@ pkill Shoo
 sleep 1
 
 if ansible-pull -U https://github.com/HDTS1/shooter_user.git main.yml 2>&1 \
-    | yad --title="Applying Update..." --width=600 --height=400 --text-info --center --wrap --no-buttons; then
+    | yad --title="Applying Update..." --width=600 --height=400 --text-info --center --wrap; then
 
     cp "$TMP_REMOTE_LOG" "$LOCAL_CHANGELOG"
     sleep 1
@@ -92,7 +92,7 @@ if [ "$RESPONSE" -eq 0 ]; then
 
     if ansible-pull -U https://github.com/HDTS1/shooter_user.git main.yml 2>&1 \
         | tee >(yad --title="Applying Update..." --width=600 --height=400 \
-                    --text-info --tail --no-buttons --center) \
+                    --text-info --tail --center) \
         | cat > /dev/null; then
 
         cp "$TMP_REMOTE_LOG" "$LOCAL_CHANGELOG"
