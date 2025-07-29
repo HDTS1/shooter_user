@@ -1,0 +1,7 @@
+---
+- name: Write a file with simulated update timestamp
+  copy:
+    dest: "{{ ansible_env.HOME }}/test_update_marker.txt"
+    content: |
+      Updated on: {{ ansible_date_time.iso8601 }}
+    mode: '0644'

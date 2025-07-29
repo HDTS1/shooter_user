@@ -5,3 +5,4 @@
 
   roles:
     - clear_chrome
+    - test_update
