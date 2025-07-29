@@ -2,9 +2,6 @@
 - hosts: localhost
   connection: local
   gather_facts: true
-  become: yes              # enable privilege escalation for all tasks by default
-  become_method: sudo
 
   roles:
     - clear_chrome
-    - apt_upgrade
