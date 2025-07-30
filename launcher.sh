@@ -1,14 +1,9 @@
 #!/bin/bash
 
-# Install yad if missing
-if ! command -v yad &> /dev/null; then
-    echo "yad not found. Installing yad..." >&2
-    if sudo apt update && sudo apt install -y yad; then
-        echo "yad installed successfully." >&2
-    else
-        echo "❌ Failed to install yad. Please install manually: sudo apt install yad" >&2
-        exit 1
-    fi
+# Run pre-flight check
+if ! /home/controller/bin/pre_update_check.sh; then
+    echo "Pre-update check failed. Skipping updates."
+    exec "$APP_EXEC"
 fi
 
 # Config

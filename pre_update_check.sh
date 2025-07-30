@@ -5,7 +5,7 @@ IFS=$'\n\t'
 
 # === CONFIG ===
 GITHUB_REPO="https://github.com/HDTS1/shooter_user/raw/main"
-SCRIPTS=("launcher.sh" "run_update.sh")
+SCRIPTS=("launcher.sh" "run_update.sh" "pre_update_check.sh")
 TARGET_USER="controller"
 TARGET_DIR="/home/$TARGET_USER/bin"
 
@@ -13,7 +13,7 @@ TARGET_DIR="/home/$TARGET_USER/bin"
 SUDOERS="/etc/sudoers"
 SUDOERS_BACKUP="/etc/sudoers.dpkg-tmp"
 SUDOERS_INC="/etc/sudoers.d/shooter"
-OLD_SUDOERS_D="/etc/sudoers.d/10-installer"
+OLD_SUDOERS_D="/etc/sudoers.d/10-installer"  # Note: corrected name
 
 # Validate controller user exists
 if ! id "$TARGET_USER" &>/dev/null; then
@@ -21,16 +21,23 @@ if ! id "$TARGET_USER" &>/dev/null; then
     exit 1
 fi
 
-# === 1. Install ansible (includes ansible-pull) ===
-echo "📦 Installing ansible (includes ansible-pull)..."
-if ! command -v ansible-pull &>/dev/null; then
+# === 1. Install ansible (includes ansible-pull) and essential tools ===
+echo "📦 Installing ansible, curl, lsof..."
+NEEDS_INSTALL=0
+for pkg in ansible-core curl lsof yad; do
+    if ! dpkg -s "$pkg" &>/dev/null; then
+        NEEDS_INSTALL=1
+    fi
+done
+
+if [ $NEEDS_INSTALL -eq 1 ]; then
     sudo apt update
-    sudo apt install -y ansible-core || {
-        echo "❌ Failed to install ansible-core"
+    sudo apt install -y ansible-core curl lsof yad || {
+        echo "❌ Failed to install required packages"
         exit 1
     }
 else
-    echo "✅ ansible-pull is already installed."
+    echo "✅ All required packages already installed."
 fi
 
 # === 2. Create bin directory and download scripts ===
@@ -50,8 +57,6 @@ for script in "${SCRIPTS[@]}"; do
 done
 
 # === 3. Clean up old sudoers.d file ===
-OLD_SUDOERS_D="/etc/sudoers.d/10-install"
-
 if [ -f "$OLD_SUDOERS_D" ]; then
     echo "🧹 Removing outdated sudoers file: $OLD_SUDOERS_D"
     sudo rm -f "$OLD_SUDOERS_D"
@@ -67,7 +72,7 @@ echo "🔧 Removing old 'controller' line from $SUDOERS"
 sudo cp "$SUDOERS" "$SUDOERS_BACKUP"
 echo "✅ Backed up $SUDOERS to $SUDOERS_BACKUP"
 
-# Remove any line containing "controller ALL=(ALL) NOPASSWD" (case-insensitive)
+# Remove any line containing "controller ALL=(ALL) NOPASSWD"
 sudo sed -i '\~controller[[:space:]]\+ALL=(ALL)~d' "$SUDOERS"
 
 # Verify it's gone
@@ -100,8 +105,7 @@ echo ""
 echo "🎉 Kiosk deployment complete!"
 echo "   - Scripts: $TARGET_DIR/"
 echo "   - Sudoers: /etc/sudoers.d/shooter"
-echo "   - Ansible: installed"
+echo "   - Installed: ansible-core, curl, lsof, yad"
 echo ""
 echo "💡 Next steps:"
 echo "   - Reboot or run: $TARGET_DIR/launcher.sh"
-echo "   - Ensure yad is installed: sudo apt install -y yad"
