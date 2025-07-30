@@ -4,10 +4,11 @@
 LOG_FILE="/tmp/shooter_update.log"
 ROOT_EXIT="/tmp/shooter_update_root_exit_code"
 USER_EXIT="/tmp/shooter_update_user_exit_code"
+CTRL_EXIT="/tmp/shooter_update_controller_exit_code"
 
 # Clear old logs and exit codes
 > "$LOG_FILE"
-rm -f "$ROOT_EXIT" "$USER_EXIT"
+rm -f "$ROOT_EXIT" "$USER_EXIT" "$CTRL_EXIT"
 
 {
     echo "[$(date)] Starting system update (root)..."
@@ -26,6 +27,15 @@ rm -f "$ROOT_EXIT" "$USER_EXIT"
     else
         echo "1" > "$USER_EXIT"
         echo "❌ User update failed."
+    fi
+
+    echo "[$(date)] Starting controller-specific update..."
+    if ansible-pull -U https://github.com/HDTS1/shooter_controller.git main.yml; then
+        echo "0" > "$CTRL_EXIT"
+        echo "✅ Controller update succeeded."
+    else
+        echo "1" > "$CTRL_EXIT"
+        echo "❌ Controller update failed."
     fi
 
     echo "[$(date)] Update phase complete."

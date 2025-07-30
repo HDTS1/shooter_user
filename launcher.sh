@@ -9,17 +9,20 @@ fi
 # Config
 USER_REPO="https://raw.githubusercontent.com/HDTS1/shooter_user/main/CHANGELOG.txt"
 ROOT_REPO="https://raw.githubusercontent.com/HDTS1/shooter_root/main/CHANGELOG.txt"
+CTRL_REPO="https://raw.githubusercontent.com/HDTS1/shooter_controller/main/CHANGELOG.txt"
 
 LOCAL_USER_LOG="$HOME/.shooter_last_user_changelog.txt"
 LOCAL_ROOT_LOG="$HOME/.shooter_last_root_changelog.txt"
+LOCAL_CTRL_LOG="$HOME/.shooter_last_controller_changelog.txt"
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 APP_EXEC="/home/controller/shooter/controller/ShooterController"
 LOG_FILE="/tmp/shooter_update.log"
 
-# Exit code files for two-stage update
+# Exit code files for three-stage update
 ROOT_EXIT="/tmp/shooter_update_root_exit_code"
 USER_EXIT="/tmp/shooter_update_user_exit_code"
+CTRL_EXIT="/tmp/shooter_update_controller_exit_code"
 
 # Function to show update result
 show_update_result() {
@@ -47,19 +50,22 @@ sleep 1
 # Fetch remote changelogs
 TMP_USER_LOG=$(mktemp)
 TMP_ROOT_LOG=$(mktemp)
+TMP_CTRL_LOG=$(mktemp)
 
 curl -s "$USER_REPO" -o "$TMP_USER_LOG"
 curl -s "$ROOT_REPO" -o "$TMP_ROOT_LOG"
+curl -s "$CTRL_REPO" -o "$TMP_CTRL_LOG"
 
 # First run detection (missing local logs)
 FIRST_RUN="false"
-if [ ! -f "$LOCAL_USER_LOG" ] || [ ! -f "$LOCAL_ROOT_LOG" ]; then
+if [ ! -f "$LOCAL_USER_LOG" ] || [ ! -f "$LOCAL_ROOT_LOG" ] || [ ! -f "$LOCAL_CTRL_LOG" ]; then
     FIRST_RUN="true"
 fi
 
 # Compare both changelogs
 USER_CHANGED=""
 ROOT_CHANGED=""
+CTRL_CHANGED=""
 
 if [ ! -f "$LOCAL_USER_LOG" ] || ! cmp -s "$LOCAL_USER_LOG" "$TMP_USER_LOG"; then
     USER_CHANGED="yes"
@@ -67,6 +73,10 @@ fi
 
 if [ ! -f "$LOCAL_ROOT_LOG" ] || ! cmp -s "$LOCAL_ROOT_LOG" "$TMP_ROOT_LOG"; then
     ROOT_CHANGED="yes"
+fi
+
+if [ ! -f "$LOCAL_CTRL_LOG" ] || ! cmp -s "$LOCAL_CTRL_LOG" "$TMP_CTRL_LOG"; then
+    CTRL_CHANGED="yes"
 fi
 
 # If no changes and not first run, launch app
@@ -89,6 +99,11 @@ fi
 if [ "$ROOT_CHANGED" = "yes" ]; then
     ROOT_DIFF=$(diff --unchanged-group-format='' --changed-group-format='%>' "$LOCAL_ROOT_LOG" "$TMP_ROOT_LOG")
     CHANGE_MSG+="🔐 <b>System Updates:</b>\n\n$ROOT_DIFF"
+fi
+
+if [ "$CTRL_CHANGED" = "yes" ]; then
+    CTRL_DIFF=$(diff --unchanged-group-format='' --changed-group-format='%>' "$LOCAL_CTRL_LOG" "$TMP_CTRL_LOG")
+    CHANGE_MSG+="🛠️ <b>Controller Updates:</b>\n\n$CTRL_DIFF"
 fi
 
 # Show update dialog if first run or changes detected
@@ -119,7 +134,7 @@ else
 fi
 
 # Clean old exit codes
-rm -f "$ROOT_EXIT" "$USER_EXIT"
+rm -f "$ROOT_EXIT" "$USER_EXIT" "$CTRL_EXIT"
 
 # Launch terminal with both updates
 xfce4-terminal \
@@ -149,9 +164,10 @@ ROOT_OK=""
 USER_OK=""
 TIMEOUT=600
 while [ $TIMEOUT -gt 0 ]; do
-    if [ -f "$ROOT_EXIT" ] && [ -f "$USER_EXIT" ]; then
+    if [ -f "$ROOT_EXIT" ] && [ -f "$USER_EXIT" ] && [ -f "$CTRL_EXIT" ]; then
         ROOT_OK=$(cat "$ROOT_EXIT")
         USER_OK=$(cat "$USER_EXIT")
+        CTRL_OK=$(cat "$CTRL_EXIT")
         break
     fi
     sleep 2
@@ -159,17 +175,18 @@ while [ $TIMEOUT -gt 0 ]; do
 done
 
 # Handle timeout
-if [ -z "$ROOT_OK" ] || [ -z "$USER_OK" ]; then
+if [ -z "$ROOT_OK" ] || [ -z "$USER_OK" ] || [ -z "$CTRL_OK" ]; then
     ROOT_OK=${ROOT_OK:-1}
     USER_OK=${USER_OK:-1}
+    CTRL_OK=${CTRL_OK:-1}
     echo "❌ Timeout: One or more updates failed to complete." >> "$LOG_FILE"
 fi
 
 # Handle result
-if [ "$ROOT_OK" -eq 0 ] && [ "$USER_OK" -eq 0 ]; then
-    # Update both local logs
+if [ "$ROOT_OK" -eq 0 ] && [ "$USER_OK" -eq 0 ] && [ "$CTRL_OK" -eq 0 ]; then
     cp "$TMP_USER_LOG" "$LOCAL_USER_LOG"
     cp "$TMP_ROOT_LOG" "$LOCAL_ROOT_LOG"
+    cp "$TMP_CTRL_LOG" "$LOCAL_CTRL_LOG"
 
     yad --title="Update Complete" \
         --text="<span font='13' foreground='green'><b>All updates succeeded!\nSystem will now reboot.</b></span>" \
@@ -180,32 +197,43 @@ elif [ "$ROOT_OK" -eq 0 ] && [ "$USER_OK" -ne 0 ]; then
     show_update_result "System update OK, but user config failed.\nApp may be outdated.\nLaunch anyway?" "orange" false
     nohup "$APP_EXEC" > /dev/null 2>&1 & disown
 
-elif [ "$ROOT_OK" -ne 0 ] && [ "$USER_OK" -eq 0 ]; then
-    show_update_result "User update OK, but SYSTEM UPDATE FAILED.\nThis may cause instability.\nCheck log at $LOG_FILE.\nLaunch app anyway?" "red" true
-    RESPONSE=$?
-if [ "$RESPONSE" -eq 2 ]; then
-    rm -f "$ROOT_EXIT" "$USER_EXIT"
-    # Re-execute using the resolved script path
-    SCRIPT_PATH="$(readlink -f "$0")"
-    if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
-        exec "$SCRIPT_PATH"
-    else
-        yad --error --text="Launcher script not found. Cannot retry."
-        exit 1
-    fi
-fi
+elif [ "$ROOT_OK" -ne 0 ] && [ "$USER_OK" -eq 0 ] && [ "$CTRL_OK" -eq 0 ]; then
+    # Only system failed
+    yad --title="System Update Failed" \
+        --text="<span font='13' foreground='red'><b>SYSTEM UPDATE FAILED ❌</b>\n\nThis may cause instability.\nCheck log at $LOG_FILE\nApp will now start.</b></span>" \
+        --button="💤 Launch App:1" \
+        --button="👍 OK:0" \
+        --width=600 --height=250 --center
+
     nohup "$APP_EXEC" > /dev/null 2>&1 & disown
 
 else
-    show_update_result "Both system and user updates failed.\nCheck log at $LOG_FILE.\nRetry or launch app anyway?" "red" true
-    RESPONSE=$?
-    if [ "$RESPONSE" -eq 2 ]; then
-        rm -f "$ROOT_EXIT" "$USER_EXIT"
-        exec "$0"
+    # Build accurate failure message
+    FAIL_MSG="One or more updates failed:\n\n"
+
+    if [ "$ROOT_OK" -ne 0 ]; then
+        FAIL_MSG+="❌ System update failed (critical)\n"
     fi
+    if [ "$USER_OK" -ne 0 ]; then
+        FAIL_MSG+="❌ User config update failed\n"
+    fi
+    if [ "$CTRL_OK" -ne 0 ]; then
+        FAIL_MSG+="❌ Controller update failed\n"
+    fi
+
+    FAIL_MSG+="\nCheck log at $LOG_FILE\nApp will now start."
+
+    # Show message — only OK and Skip
+    yad --title="Update Warning" \
+        --text="<span font='13' foreground='red'><b>$FAIL_MSG</b></span>" \
+        --button="💤 Launch App:1" \
+        --button="👍 OK:0" \
+        --width=600 --height=250 --center
+
+    # Launch app no matter what
     nohup "$APP_EXEC" > /dev/null 2>&1 & disown
 fi
 
 # Cleanup
-rm -f "$TMP_USER_LOG" "$TMP_ROOT_LOG"
+rm -f "$TMP_USER_LOG" "$TMP_ROOT_LOG" "$TMP_CTRL_LOG"
 exit 0
