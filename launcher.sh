@@ -188,10 +188,17 @@ elif [ "$ROOT_OK" -eq 0 ] && [ "$USER_OK" -ne 0 ]; then
 elif [ "$ROOT_OK" -ne 0 ] && [ "$USER_OK" -eq 0 ]; then
     show_update_result "User update OK, but SYSTEM UPDATE FAILED.\nThis may cause instability.\nCheck log at $LOG_FILE.\nLaunch app anyway?" "red" true
     RESPONSE=$?
-    if [ "$RESPONSE" -eq 2 ]; then
-        rm -f "$ROOT_EXIT" "$USER_EXIT"
-        exec "$0"
+if [ "$RESPONSE" -eq 2 ]; then
+    rm -f "$ROOT_EXIT" "$USER_EXIT"
+    # Re-execute using the resolved script path
+    SCRIPT_PATH="$(readlink -f "$0")"
+    if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
+        exec "$SCRIPT_PATH"
+    else
+        yad --error --text="Launcher script not found. Cannot retry."
+        exit 1
     fi
+fi
     nohup "$APP_EXEC" > /dev/null 2>&1 & disown
 
 else
