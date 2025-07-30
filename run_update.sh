@@ -1,34 +1,33 @@
 #!/bin/bash
 
+# Log and exit code files
 LOG_FILE="/tmp/shooter_update.log"
-EXIT_CODE_FILE="/tmp/shooter_update_exit_code"
+ROOT_EXIT="/tmp/shooter_update_root_exit_code"
+USER_EXIT="/tmp/shooter_update_user_exit_code"
 
-# Always write exit code on exit, no matter what
-trap 'echo "$FINAL_EXIT_CODE" > "$EXIT_CODE_FILE"' EXIT
-
-# Initialize exit code
-FINAL_EXIT_CODE=0
-
-# Clear log
+# Clear old logs and exit codes
 > "$LOG_FILE"
+rm -f "$ROOT_EXIT" "$USER_EXIT"
 
 {
-    echo "[$(date)] Starting update..."
-    echo "Running ansible-pull on main.yml"
-
-    # Run ansible-pull
-    ansible-pull -v -U https://github.com/HDTS1/shooter_user.git main.yml
-
-    # Capture result
-    FINAL_EXIT_CODE=$?
-
-    if [ $FINAL_EXIT_CODE -eq 0 ]; then
-        echo "✅ Update succeeded."
+    echo "[$(date)] Starting system update (root)..."
+    if sudo ansible-pull -U https://github.com/HDTS1/shooter_root.git main.yml; then
+        echo "0" > "$ROOT_EXIT"
+        echo "✅ System update succeeded."
     else
-        echo "❌ Update failed with code: $FINAL_EXIT_CODE"
+        echo "1" > "$ROOT_EXIT"
+        echo "❌ System update failed."
     fi
 
-} &>> "$LOG_FILE"
+    echo "[$(date)] Starting user update (controller)..."
+    if ansible-pull -U https://github.com/HDTS1/shooter_user.git main.yml; then
+        echo "0" > "$USER_EXIT"
+        echo "✅ User update succeeded."
+    else
+        echo "1" > "$USER_EXIT"
+        echo "❌ User update failed."
+    fi
 
-# This ensures trap fires and writes the file
-exit $FINAL_EXIT_CODE
+    echo "[$(date)] Update phase complete."
+
+} &>> "$LOG_FILE"
